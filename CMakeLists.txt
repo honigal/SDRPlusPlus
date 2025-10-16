@@ -27,6 +27,7 @@ option(OPT_BUILD_PERSEUS_SOURCE "Build Perseus Source Module (Dependencies: libp
 option(OPT_BUILD_PLUTOSDR_SOURCE "Build PlutoSDR Source Module (Dependencies: libiio, libad9361)" ON)
 option(OPT_BUILD_RFNM_SOURCE "Build RFNM Source Module (Dependencies: librfnm)" OFF)
 option(OPT_BUILD_RFSPACE_SOURCE "Build RFspace Source Module (no dependencies required)" ON)
+option(OPT_BUILD_RSA306_SOURCE "Build RSA306 Source Module (Dependencies: SoapySDR, Tektronix RSA API)" OFF)
 option(OPT_BUILD_RTL_SDR_SOURCE "Build RTL-SDR Source Module (Dependencies: librtlsdr)" ON)
 option(OPT_BUILD_RTL_TCP_SOURCE "Build RTL-TCP Source Module (no dependencies required)" ON)
 option(OPT_BUILD_SDRPP_SERVER_SOURCE "Build SDR++ Server Source Module (no dependencies required)" ON)
@@ -195,6 +196,10 @@ if (OPT_BUILD_RFSPACE_SOURCE)
 add_subdirectory("source_modules/rfspace_source")
 endif (OPT_BUILD_RFSPACE_SOURCE)
 
+if (OPT_BUILD_RSA306_SOURCE)
+add_subdirectory("source_modules/rsa306_source")
+endif (OPT_BUILD_RSA306_SOURCE)
+
 if (OPT_BUILD_RTL_SDR_SOURCE)
 add_subdirectory("source_modules/rtl_sdr_source")
 endif (OPT_BUILD_RTL_SDR_SOURCE)
@@ -351,7 +356,28 @@ target_compile_options(sdrpp PRIVATE ${SDRPP_COMPILER_FLAGS})
 # Copy dynamic libs over
 if (MSVC)
     add_custom_target(do_always ALL xcopy /s \"$<TARGET_FILE_DIR:sdrpp_core>\\*.dll\" \"$<TARGET_FILE_DIR:sdrpp>\" /Y)
-    add_custom_target(do_always_volk ALL xcopy /s \"C:/Program Files/PothosSDR/bin\\volk.dll\" \"$<TARGET_FILE_DIR:sdrpp>\" /Y)
+
+    set(VOLK_DLL_CANDIDATES
+        "C:/Program Files/PothosSDR/bin/volk.dll"
+        "C:/ProgramData/radioconda/Library/bin/volk.dll"
+        "$ENV{USERPROFILE}/Downloads/sdrpp_windows_x64/volk.dll"
+    )
+
+    set(VOLK_DLL_SOURCE "")
+    foreach(candidate IN LISTS VOLK_DLL_CANDIDATES)
+        if (EXISTS "${candidate}")
+            set(VOLK_DLL_SOURCE "${candidate}")
+            break()
+        endif()
+    endforeach()
+
+    if (VOLK_DLL_SOURCE)
+        add_custom_target(do_always_volk ALL
+            COMMAND ${CMAKE_COMMAND} -E copy "${VOLK_DLL_SOURCE}" "$<TARGET_FILE_DIR:sdrpp>/volk.dll"
+        )
+    else()
+        message(WARNING "volk.dll not found in the usual locations; skipping copy step")
+    endif()
 
     if (COPY_MSVC_REDISTRIBUTABLES)
         # Get the list of Visual C++ runtime DLLs
@@ -359,7 +385,7 @@ if (MSVC)
         include(InstallRequiredSystemLibraries)
 
         # Create a space sperated list
-        set(REDIST_DLLS_STR "")
+        set(REDIST_DLLS_STR \"\")
         foreach(DLL IN LISTS CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS)
             set(REDIST_DLLS_STR COMMAND xcopy /F \"${DLL}\" \"$<TARGET_FILE_DIR:sdrpp>\" /Y ${REDIST_DLLS_STR})
         endforeach()
